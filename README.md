@@ -2,6 +2,8 @@
 
 A local web app for triaging and exporting clips from a Viofo dashcam on macOS. No cloud upload, no installation beyond Node.js — ffmpeg is bundled automatically.
 
+![Dashcam Editor screenshot](screenshot.webp)
+
 ## Requirements
 
 - Node.js 18+

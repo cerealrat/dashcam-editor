@@ -19,7 +19,7 @@ let clipsDir = '';
 app.post('/api/set-dir', (req, res) => {
   const { dir } = req.body;
   if (!fs.existsSync(dir)) return res.status(400).json({ error: 'Directory not found' });
-  clipsDir = dir;
+  clipsDir = dir.replace(/[/\\]+$/, '');
   res.json({ ok: true });
 });
 
