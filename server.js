@@ -39,7 +39,7 @@ app.get('/api/clips', (req, res) => {
 // Stream a video file with range support
 app.get('/api/video/:filename', (req, res) => {
   const filePath = path.join(clipsDir, req.params.filename);
-  if (!filePath.startsWith(clipsDir)) return res.status(403).end();
+  if (!filePath.startsWith(clipsDir + path.sep)) return res.status(403).end();
   if (!fs.existsSync(filePath)) return res.status(404).end();
 
   const stat = fs.statSync(filePath);
@@ -71,7 +71,7 @@ app.get('/api/video/:filename', (req, res) => {
 // Get metadata for a file
 app.get('/api/metadata/:filename', (req, res) => {
   const filePath = path.join(clipsDir, req.params.filename);
-  if (!filePath.startsWith(clipsDir)) return res.status(403).end();
+  if (!filePath.startsWith(clipsDir + path.sep)) return res.status(403).end();
   ffmpeg.ffprobe(filePath, (err, metadata) => {
     if (err) return res.status(500).json({ error: err.message });
     const vs = metadata.streams.find(s => s.codec_type === 'video') || {};
