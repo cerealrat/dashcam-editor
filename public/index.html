@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashcam Editor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Toolbar */
+  #toolbar { background: #2a2a2a; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #3a3a3a; flex-shrink: 0; }
+  #toolbar h1 { font-size: 14px; font-weight: 600; color: #ccc; margin-right: 8px; white-space: nowrap; }
+  #dir-input { flex: 1; background: #1a1a1a; border: 1px solid #444; color: #e0e0e0; padding: 5px 8px; border-radius: 4px; font-size: 13px; }
+  .btn { background: #3a3a3a; border: 1px solid #555; color: #e0e0e0; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .btn:hover { background: #4a4a4a; }
+  .btn.primary { background: #0066cc; border-color: #0077ee; }
+  .btn.primary:hover { background: #0077ee; }
+  .btn.success { background: #1a5c1a; border-color: #2a7a2a; }
+  .btn.success:hover { background: #2a7a2a; }
+  .btn.danger { background: #8B0000; border-color: #aa0000; }
+  .btn.danger:hover { background: #aa0000; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* Main layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Clip list */
+  #sidebar { width: 220px; background: #222; border-right: 1px solid #333; display: flex; flex-direction: column; flex-shrink: 0; }
+  #sidebar-header { padding: 8px 10px; font-size: 12px; color: #888; border-bottom: 1px solid #333; }
+  #clip-list { flex: 1; overflow-y: auto; }
+  .clip-item { padding: 7px 10px; cursor: pointer; font-size: 12px; color: #bbb; border-bottom: 1px solid #2a2a2a; user-select: none; }
+  .clip-item:hover { background: #2e2e2e; }
+  .clip-item.active { background: #0066cc22; color: #4a9eff; border-left: 2px solid #0066cc; }
+  .clip-item.queued { background: #1a3a1a; color: #5dbb5d; }
+  .clip-item.queued.active { background: #1a4a2a; color: #6dcc6d; }
+  .clip-name { font-size: 11px; word-break: break-all; }
+
+  /* Player area */
+  #player-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  #video-wrap { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; position: relative; min-height: 0; }
+  #video { max-width: 100%; max-height: 100%; display: block; }
+  #no-video { color: #555; font-size: 15px; }
+
+  /* Timeline */
+  #timeline-area { background: #1e1e1e; border-top: 1px solid #333; padding: 10px 12px; flex-shrink: 0; }
+  #time-display { font-size: 12px; color: #888; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  #timeline { position: relative; height: 36px; background: #2a2a2a; border-radius: 4px; cursor: pointer; user-select: none; }
+  #progress-bar { position: absolute; height: 100%; background: #333; border-radius: 4px; pointer-events: none; }
+  #selection { position: absolute; height: 100%; background: #0066cc44; pointer-events: none; }
+  #in-marker { position: absolute; top: 0; height: 100%; width: 3px; background: #00cc66; cursor: ew-resize; z-index: 2; display: none; }
+  #out-marker { position: absolute; top: 0; height: 100%; width: 3px; background: #cc3300; cursor: ew-resize; z-index: 2; display: none; }
+  #playhead { position: absolute; top: 0; height: 100%; width: 2px; background: #fff; pointer-events: none; z-index: 3; }
+
+  /* Controls */
+  #controls { background: #222; padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; border-top: 1px solid #2a2a2a; flex-wrap: wrap; }
+  #controls .time { font-size: 12px; font-family: monospace; color: #aaa; min-width: 80px; }
+  .ctrl-group { display: flex; gap: 4px; align-items: center; }
+  .sep { width: 1px; height: 20px; background: #444; margin: 0 4px; }
+  #speed-select { background: #2a2a2a; border: 1px solid #444; color: #ccc; padding: 3px 6px; border-radius: 3px; font-size: 12px; }
+
+  /* Queue */
+  #queue-area { background: #1e1e1e; border-top: 1px solid #333; padding: 8px 12px; flex-shrink: 0; max-height: 180px; overflow-y: auto; }
+  #queue-header { font-size: 12px; color: #888; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  #queue-list { display: flex; flex-direction: column; gap: 4px; }
+
+  /* Queue groups */
+  .queue-group { border: 1px solid #333; border-radius: 5px; overflow: hidden; }
+  .queue-group-header { background: #252525; padding: 4px 8px; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #888; border-bottom: 1px solid #333; }
+  .queue-group-label { flex: 1; font-weight: 600; color: #aaa; }
+  .queue-group-del { cursor: pointer; color: #555; font-size: 13px; }
+  .queue-group-del:hover { color: #cc3300; }
+  .queue-segment { padding: 5px 8px; display: flex; align-items: center; gap: 6px; font-size: 11px; border-bottom: 1px solid #2a2a2a; }
+  .queue-segment:last-child { border-bottom: none; }
+  .queue-seg-name { flex: 1; color: #bbb; word-break: break-all; }
+  .queue-seg-pts { font-family: monospace; color: #777; white-space: nowrap; }
+  .queue-seg-del { cursor: pointer; color: #555; font-size: 13px; }
+  .queue-seg-del:hover { color: #cc3300; }
+
+  /* Merge hint banner */
+  #merge-hint { display: none; background: #1a3a2a; border: 1px solid #2a6a4a; border-radius: 4px; padding: 6px 10px; margin-top: 4px; font-size: 12px; color: #5dbb8d; display: flex; align-items: center; gap: 8px; }
+  #merge-hint.visible { display: flex; }
+  #merge-hint.hidden { display: none; }
+
+  /* Metadata panel */
+  #meta-panel { width: 200px; background: #1e1e1e; border-left: 1px solid #333; padding: 10px; font-size: 11px; overflow-y: auto; flex-shrink: 0; display: none; }
+  #meta-panel.visible { display: block; }
+  #meta-panel h3 { font-size: 11px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .meta-row { display: flex; justify-content: space-between; margin-bottom: 5px; gap: 4px; }
+  .meta-label { color: #666; }
+  .meta-value { color: #bbb; text-align: right; word-break: break-all; }
+
+  /* Export modal */
+  #export-modal { display: none; position: fixed; inset: 0; background: #0008; align-items: center; justify-content: center; z-index: 100; }
+  #export-modal.visible { display: flex; }
+  #export-box { background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 20px; width: 460px; max-height: 80vh; overflow-y: auto; }
+  #export-box h2 { font-size: 15px; margin-bottom: 14px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+  .field input { width: 100%; background: #1a1a1a; border: 1px solid #444; color: #e0e0e0; padding: 6px 8px; border-radius: 4px; font-size: 13px; }
+  #export-group-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .export-group-row { background: #222; border-radius: 4px; padding: 8px; }
+  .export-group-row label { font-size: 11px; color: #888; display: block; margin-bottom: 4px; }
+  .export-group-row input { width: 100%; background: #1a1a1a; border: 1px solid #444; color: #e0e0e0; padding: 5px 7px; border-radius: 3px; font-size: 12px; }
+  .export-group-row .seg-list { font-size: 10px; color: #666; margin-top: 4px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  #export-status { margin-top: 10px; font-size: 12px; color: #888; min-height: 16px; white-space: pre-wrap; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #1a1a1a; }
+  ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>Dashcam Editor</h1>
+  <input id="dir-input" type="text" placeholder="Paste clips folder path here..." />
+  <button class="btn" onclick="loadDir()">Load</button>
+  <div style="flex:1"></div>
+  <button class="btn" id="meta-toggle" onclick="toggleMeta()">Metadata</button>
+  <button class="btn primary" onclick="openExport()" id="export-btn" disabled>Export Queue</button>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div id="sidebar-header"><span id="clip-count">No clips loaded</span></div>
+    <div id="clip-list"></div>
+  </div>
+
+  <div id="player-area">
+    <div id="video-wrap">
+      <div id="no-video">Load a folder to begin</div>
+      <video id="video" style="display:none" preload="metadata"></video>
+    </div>
+
+    <div id="timeline-area">
+      <div id="time-display">
+        <span id="current-time">0:00.000</span>
+        <span id="in-out-display">In: — &nbsp; Out: —</span>
+        <span id="total-time">0:00.000</span>
+      </div>
+      <div id="timeline">
+        <div id="progress-bar"></div>
+        <div id="selection"></div>
+        <div id="in-marker"></div>
+        <div id="out-marker"></div>
+        <div id="playhead"></div>
+      </div>
+    </div>
+
+    <div id="controls">
+      <span class="time" id="ctrl-time">0:00.000</span>
+      <div class="ctrl-group">
+        <button class="btn" onclick="stepFrame(-1)" title="Prev frame (,)">&#9664;</button>
+        <button class="btn" id="play-btn" onclick="togglePlay()" title="Play/Pause (Space)">&#9654;</button>
+        <button class="btn" onclick="stepFrame(1)" title="Next frame (.)">&#9654;&#9654;</button>
+        <button class="btn" id="mute-btn" onclick="toggleMute()" title="Mute/Unmute (M)">&#128266;</button>
+      </div>
+      <div class="sep"></div>
+      <select id="speed-select" onchange="setSpeed(this.value)" title="Playback speed">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+      </select>
+      <div class="sep"></div>
+      <button class="btn" onclick="setIn()" title="Set In point (I)" style="color:#00cc66">Set In</button>
+      <button class="btn" onclick="setOut()" title="Set Out point (O)" style="color:#cc3300">Set Out</button>
+      <button class="btn" onclick="clearInOut()" title="Clear markers">Clear</button>
+      <div class="sep"></div>
+      <button class="btn primary" onclick="addToQueue(false)" id="queue-btn" title="Add as new export (Q)">+ New Export</button>
+      <button class="btn success" onclick="addToQueue(true)" id="merge-btn" title="Append to last group (Shift+Q)">+ Merge into Last</button>
+    </div>
+
+    <div id="merge-hint" class="hidden">
+      <span>&#9650; Consecutive clip detected — merge with last group?</span>
+      <button class="btn success" style="padding:2px 8px;font-size:11px" onclick="addToQueue(true); hideMergeHint()">Merge</button>
+      <button class="btn" style="padding:2px 8px;font-size:11px" onclick="hideMergeHint()">Dismiss</button>
+    </div>
+
+    <div id="queue-area">
+      <div id="queue-header">
+        <span>Export Queue — <span id="queue-count">0</span> group(s)</span>
+        <button class="btn danger" onclick="clearQueue()" style="padding:2px 8px;font-size:11px">Clear All</button>
+      </div>
+      <div id="queue-list"></div>
+    </div>
+  </div>
+
+  <div id="meta-panel">
+    <h3>Metadata</h3>
+    <div id="meta-content"><span style="color:#555">Select a clip</span></div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div id="export-modal">
+  <div id="export-box">
+    <h2>Export Clips</h2>
+    <div class="field">
+      <label>Output folder</label>
+      <input id="out-dir" type="text" placeholder="e.g. /Users/you/Desktop" />
+    </div>
+    <div id="export-group-list"></div>
+    <div id="export-status"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeExport()">Cancel</button>
+      <button class="btn primary" onclick="runExport()" id="run-export-btn">Export All</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const video = $('video');
+
+let clips = [];
+let currentClip = null;
+let inPoint = null;
+let outPoint = null;
+// queue: array of groups; each group = { segments: [{file, inPoint, outPoint}] }
+let queue = [];
+let isDragging = null;
+let metaVisible = false;
+const FPS = 30;
+
+// --- Directory ---
+async function loadDir() {
+  const dir = $('dir-input').value.trim();
+  if (!dir) return;
+  const r = await fetch('/api/set-dir', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ dir }) });
+  if (!r.ok) { alert('Could not load directory: ' + (await r.json()).error); return; }
+  await refreshClips();
+}
+
+async function refreshClips() {
+  const r = await fetch('/api/clips');
+  const data = await r.json();
+  if (r.ok) {
+    clips = data;
+    renderClipList();
+    $('clip-count').textContent = clips.length + ' clips';
+  } else {
+    alert(data.error);
+  }
+}
+
+function renderClipList() {
+  const list = $('clip-list');
+  list.innerHTML = '';
+  const queuedFiles = new Set(queue.flatMap(g => g.segments.map(s => s.file)));
+  clips.forEach(name => {
+    const div = document.createElement('div');
+    div.className = 'clip-item' + (name === currentClip ? ' active' : '') + (queuedFiles.has(name) ? ' queued' : '');
+    div.innerHTML = `<div class="clip-name">${name}</div>`;
+    div.onclick = () => loadClip(name);
+    list.appendChild(div);
+  });
+}
+
+// --- Video ---
+async function loadClip(name) {
+  currentClip = name;
+  inPoint = null;
+  outPoint = null;
+  renderClipList();
+  renderInOutDisplay();
+  hideMergeHint();
+
+  video.style.display = 'block';
+  $('no-video').style.display = 'none';
+  video.src = `/api/video/${encodeURIComponent(name)}`;
+  video.load();
+
+  if (metaVisible) loadMeta(name);
+  checkConsecutiveHint();
+}
+
+video.addEventListener('timeupdate', () => {
+  updatePlayhead();
+  $('ctrl-time').textContent = fmtTime(video.currentTime);
+  $('current-time').textContent = fmtTime(video.currentTime);
+});
+video.addEventListener('loadedmetadata', () => {
+  $('total-time').textContent = fmtTime(video.duration);
+  updatePlayhead();
+  updateMarkers();
+});
+video.addEventListener('ended', () => { $('play-btn').textContent = '▶'; });
+video.addEventListener('pause', () => { $('play-btn').textContent = '▶'; });
+video.addEventListener('play', () => { $('play-btn').textContent = '⏸'; });
+
+function togglePlay() { video.paused ? video.play() : video.pause(); }
+function setSpeed(v) { video.playbackRate = parseFloat(v); }
+function stepFrame(dir) { video.pause(); video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + dir / FPS)); }
+
+function toggleMute() {
+  video.muted = !video.muted;
+  $('mute-btn').textContent = video.muted ? '🔇' : '🔊';
+  $('mute-btn').title = video.muted ? 'Unmute (M)' : 'Mute (M)';
+}
+
+// --- Timeline ---
+function updatePlayhead() {
+  if (!video.duration) return;
+  const pct = video.currentTime / video.duration;
+  $('playhead').style.left = (pct * 100) + '%';
+  $('progress-bar').style.width = (pct * 100) + '%';
+}
+
+function updateMarkers() {
+  const dur = video.duration;
+  if (!dur) return;
+  const im = $('in-marker'), om = $('out-marker'), sel = $('selection');
+  if (inPoint != null) { im.style.display = 'block'; im.style.left = (inPoint / dur * 100) + '%'; }
+  else { im.style.display = 'none'; }
+  if (outPoint != null) { om.style.display = 'block'; om.style.left = (outPoint / dur * 100) + '%'; }
+  else { om.style.display = 'none'; }
+  if (inPoint != null && outPoint != null) {
+    const l = inPoint / dur * 100, r = outPoint / dur * 100;
+    sel.style.left = l + '%'; sel.style.width = (r - l) + '%';
+  } else { sel.style.width = '0'; }
+}
+
+function setIn() { inPoint = video.currentTime; if (outPoint != null && outPoint <= inPoint) outPoint = null; renderInOutDisplay(); updateMarkers(); }
+function setOut() { outPoint = video.currentTime; if (inPoint != null && inPoint >= outPoint) inPoint = null; renderInOutDisplay(); updateMarkers(); }
+function clearInOut() { inPoint = null; outPoint = null; renderInOutDisplay(); updateMarkers(); }
+
+function renderInOutDisplay() {
+  $('in-out-display').innerHTML = 'In: ' + (inPoint != null ? fmtTime(inPoint) : '—') + ' &nbsp; Out: ' + (outPoint != null ? fmtTime(outPoint) : '—');
+}
+
+const tl = $('timeline');
+tl.addEventListener('mousedown', e => {
+  if (e.target === $('in-marker')) { isDragging = 'in'; return; }
+  if (e.target === $('out-marker')) { isDragging = 'out'; return; }
+  isDragging = 'seek'; seekFromEvent(e);
+});
+document.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  if (isDragging === 'seek') { seekFromEvent(e); return; }
+  const t = timeFromEvent(e);
+  if (isDragging === 'in') { inPoint = t; if (outPoint != null && outPoint <= t) outPoint = null; }
+  if (isDragging === 'out') { outPoint = t; if (inPoint != null && inPoint >= t) inPoint = null; }
+  renderInOutDisplay(); updateMarkers();
+});
+document.addEventListener('mouseup', () => { isDragging = null; });
+
+function seekFromEvent(e) {
+  if (!video.duration) return;
+  const rect = tl.getBoundingClientRect();
+  video.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * video.duration;
+}
+function timeFromEvent(e) {
+  if (!video.duration) return 0;
+  const rect = tl.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * video.duration;
+}
+
+// --- Viofo consecutive detection ---
+// Format: YYYY_MMDD_HHMMSS_NNNNNNX.MP4  e.g. 2026_0115_085420_001465F.MP4
+function parseViofoTimestamp(filename) {
+  const m = filename.match(/^(\d{4})_(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
+}
+
+function isConsecutiveTo(prevFile, currFile) {
+  const t1 = parseViofoTimestamp(prevFile);
+  const t2 = parseViofoTimestamp(currFile);
+  if (t1 == null || t2 == null) return false;
+  const diff = t2 - t1;
+  return diff >= 55 && diff <= 125; // 1–2 min gap (covers 60s and 120s clips)
+}
+
+function checkConsecutiveHint() {
+  if (!currentClip || !queue.length) { hideMergeHint(); return; }
+  const lastGroup = queue[queue.length - 1];
+  const lastSeg = lastGroup.segments[lastGroup.segments.length - 1];
+  if (isConsecutiveTo(lastSeg.file, currentClip)) {
+    $('merge-hint').classList.remove('hidden');
+    $('merge-hint').classList.add('visible');
+  } else {
+    hideMergeHint();
+  }
+}
+
+function hideMergeHint() {
+  $('merge-hint').classList.remove('visible');
+  $('merge-hint').classList.add('hidden');
+}
+
+// --- Queue ---
+function addToQueue(mergeWithLast) {
+  if (!currentClip) return;
+  const inPt = inPoint != null ? inPoint : 0;
+  const outPt = outPoint != null ? outPoint : (video.duration || 0);
+  const seg = { file: currentClip, inPoint: inPt, outPoint: outPt };
+
+  if (mergeWithLast && queue.length > 0) {
+    queue[queue.length - 1].segments.push(seg);
+  } else {
+    queue.push({ segments: [seg] });
+  }
+
+  hideMergeHint();
+  renderQueue();
+  renderClipList();
+  $('export-btn').disabled = false;
+}
+
+function removeGroup(gIdx) {
+  queue.splice(gIdx, 1);
+  renderQueue();
+  renderClipList();
+  if (!queue.length) $('export-btn').disabled = true;
+}
+
+function removeSegment(gIdx, sIdx) {
+  queue[gIdx].segments.splice(sIdx, 1);
+  if (!queue[gIdx].segments.length) removeGroup(gIdx);
+  else { renderQueue(); renderClipList(); }
+}
+
+function clearQueue() {
+  queue = [];
+  renderQueue();
+  renderClipList();
+  $('export-btn').disabled = true;
+}
+
+function renderQueue() {
+  $('queue-count').textContent = queue.length;
+  const list = $('queue-list');
+  list.innerHTML = '';
+  queue.forEach((group, gIdx) => {
+    const g = document.createElement('div');
+    g.className = 'queue-group';
+    const segCount = group.segments.length;
+    g.innerHTML = `
+      <div class="queue-group-header">
+        <span class="queue-group-label">Export ${gIdx + 1} &mdash; ${segCount} clip${segCount > 1 ? 's concatenated' : ''}</span>
+        <span class="queue-group-del" onclick="removeGroup(${gIdx})" title="Remove group">✕</span>
+      </div>
+    `;
+    group.segments.forEach((seg, sIdx) => {
+      const row = document.createElement('div');
+      row.className = 'queue-segment';
+      row.innerHTML = `
+        <span class="queue-seg-name">${seg.file}</span>
+        <span class="queue-seg-pts">${fmtTime(seg.inPoint)} → ${fmtTime(seg.outPoint)}</span>
+        <span class="queue-seg-del" onclick="removeSegment(${gIdx}, ${sIdx})" title="Remove">✕</span>
+      `;
+      g.appendChild(row);
+    });
+    list.appendChild(g);
+  });
+}
+
+// --- Export ---
+function defaultExportName(group) {
+  const base = group.segments[0].file.replace(/\.[^.]+$/, '');
+  return base + (group.segments.length > 1 ? '_combined' : '') + '.mp4';
+}
+
+function openExport() {
+  if (!queue.length) return;
+  $('out-dir').value = '';
+  $('export-status').textContent = '';
+  const gl = $('export-group-list');
+  gl.innerHTML = '';
+  queue.forEach((group, i) => {
+    const row = document.createElement('div');
+    row.className = 'export-group-row';
+    const segs = group.segments.map(s => `${s.file} (${fmtTime(s.inPoint)}→${fmtTime(s.outPoint)})`).join(', ');
+    row.innerHTML = `
+      <label>Export ${i + 1} filename</label>
+      <input type="text" id="export-name-${i}" value="${defaultExportName(group)}" />
+      <div class="seg-list">${segs}</div>
+    `;
+    gl.appendChild(row);
+  });
+  $('export-modal').classList.add('visible');
+}
+
+function closeExport() { $('export-modal').classList.remove('visible'); }
+
+async function runExport() {
+  const outDir = $('out-dir').value.trim();
+  if (!outDir) { $('export-status').textContent = 'Please enter an output folder.'; return; }
+
+  const groups = queue.map((group, i) => ({
+    segments: group.segments,
+    outputName: $(`export-name-${i}`).value.trim() || `export_${String(i+1).padStart(2,'0')}.mp4`,
+  }));
+
+  $('run-export-btn').disabled = true;
+  $('export-status').textContent = `Exporting ${groups.length} file(s)…`;
+
+  const r = await fetch('/api/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groups, outputDir: outDir }),
+  });
+  const data = await r.json();
+  $('run-export-btn').disabled = false;
+
+  if (r.ok) {
+    const lines = data.results.map(res =>
+      res.ok ? `✓ ${res.outFile}` : `✗ ${res.outputName}: ${res.error}`
+    );
+    $('export-status').textContent = lines.join('\n');
+  } else {
+    $('export-status').textContent = 'Error: ' + (data.error || 'Unknown error');
+  }
+}
+
+// --- Metadata ---
+function toggleMeta() {
+  metaVisible = !metaVisible;
+  $('meta-panel').classList.toggle('visible', metaVisible);
+  if (metaVisible && currentClip) loadMeta(currentClip);
+}
+
+async function loadMeta(name) {
+  $('meta-content').innerHTML = '<span style="color:#555">Loading…</span>';
+  const r = await fetch('/api/metadata/' + encodeURIComponent(name));
+  if (!r.ok) { $('meta-content').innerHTML = '<span style="color:#555">Unavailable</span>'; return; }
+  const m = await r.json();
+  const rows = [
+    ['Duration', m.duration ? fmtTime(parseFloat(m.duration)) : '—'],
+    ['Resolution', m.width && m.height ? `${m.width}×${m.height}` : '—'],
+    ['FPS', m.fps || '—'],
+    ['Codec', m.codec || '—'],
+    ['Bitrate', m.bitrate ? Math.round(m.bitrate / 1000) + ' kbps' : '—'],
+    ['Size', m.size ? (m.size / 1024 / 1024).toFixed(1) + ' MB' : '—'],
+    ['Created', m.created ? m.created.replace('T', ' ').slice(0, 19) : '—'],
+    ['GPS', m.gps || '—'],
+  ];
+  $('meta-content').innerHTML = rows.map(([l, v]) =>
+    `<div class="meta-row"><span class="meta-label">${l}</span><span class="meta-value">${v}</span></div>`
+  ).join('');
+}
+
+// --- Keyboard ---
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.code) {
+    case 'Space': e.preventDefault(); togglePlay(); break;
+    case 'KeyI': setIn(); break;
+    case 'KeyO': setOut(); break;
+    case 'KeyQ': e.shiftKey ? addToQueue(true) : addToQueue(false); break;
+    case 'KeyM': toggleMute(); break;
+    case 'Comma': stepFrame(-1); break;
+    case 'Period': stepFrame(1); break;
+    case 'ArrowLeft': video.currentTime = Math.max(0, video.currentTime - (e.shiftKey ? 10 : 5)); break;
+    case 'ArrowRight': video.currentTime = Math.min(video.duration || 0, video.currentTime + (e.shiftKey ? 10 : 5)); break;
+  }
+});
+
+function fmtTime(s) {
+  if (s == null || isNaN(s)) return '0:00.000';
+  const m = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(3).padStart(6, '0');
+  return `${m}:${sec}`;
+}
+</script>
+</body>
+</html>
