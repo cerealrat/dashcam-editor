@@ -19,6 +19,24 @@ npm start
 
 Then open **http://localhost:3847** in your browser.
 
+## Double-click launcher (macOS)
+
+If you'd rather not use the terminal, build a double-clickable app:
+
+```bash
+bash launcher/build-app.sh
+```
+
+This creates **Dashcam Editor.app** in the project folder. Drag it to your Dock or Applications. Then:
+
+- **Double-click** it to start the server and open the app in your browser.
+- **Quit it** (`Cmd-Q`, or right-click the Dock icon → Quit) to stop the server.
+- Clicking the Dock icon again while it's running just re-opens the browser tab.
+
+Because it runs the server natively (not in a container), it reads directly from local paths and mounted volumes like `/Volumes/VIOFO/Movie`.
+
+> The app has the project path baked in, so it keeps working even after you move it to the Dock or Applications. If you relocate the **project folder itself**, edit the path in `launcher/launcher.applescript` and re-run `launcher/build-app.sh`. Server logs go to `/tmp/dashcam-editor.log`.
+
 ## Usage
 
 ### 1. Load your clips

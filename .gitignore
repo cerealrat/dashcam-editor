@@ -1,1 +1,5 @@
 node_modules/
+
+# Built launcher app bundle (regenerate with launcher/build-app.sh)
+Dashcam Editor.app/
+.DS_Store
